@@ -1,0 +1,16 @@
+name = "saikiranb-url-shortener"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace for storing links
+kv_namespaces = [
+  { binding = "LINKS", id = "8cf22682ed674314883bc036224683ae" }
+]
+
+# Routes - configure your custom domain saikiranb.com
+routes = [
+  { pattern = "saikiranb.com/*", zone_name = "saikiranb.com" }
+]
+
+# Disable workers.dev subdomain - using custom domain only
+workers_dev = false

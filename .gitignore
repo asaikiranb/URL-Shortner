@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+env/
+
+# Streamlit
+.streamlit/
+
+# Data
+links.json
+
+# OS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Cloudflare
+.wrangler/
+
+# Docs
+DEPLOYMENT_GUIDE.md
+QUICK_START.md
+START_HERE.md
+SETUP_ANNANGI_COM.md
+EXAMPLE.md
+ARCHITECTURE.md
+CHECKLIST.md
+SUCCESS.md
+PROJECT_OVERVIEW.txt
+fix_dns.sh
+run_admin.sh
