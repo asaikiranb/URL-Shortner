@@ -23,11 +23,12 @@ def authenticate():
     if not st.session_state.authenticated:
         st.title("Login")
         st.markdown(f"URL Shortener for {DOMAIN}")
+        st.markdown("---")
 
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
 
-        if st.button("Login", type="primary"):
+        if st.button("Login", type="primary", use_container_width=True):
             if username == USERNAME and password == PASSWORD:
                 st.session_state.authenticated = True
                 st.rerun()
@@ -73,38 +74,14 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS for minimalistic black and white theme
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #FFFFFF;
-    }
-    .stButton>button {
-        background-color: #000000;
-        color: #FFFFFF;
-        border: 1px solid #000000;
-    }
-    .stButton>button:hover {
-        background-color: #333333;
-        border: 1px solid #333333;
-    }
-    h1, h2, h3 {
-        color: #000000;
-    }
-    .stTextInput>div>div>input {
-        border: 1px solid #000000;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # Authentication check
 if not authenticate():
     st.stop()
 
 # Main app
 st.title("URL Shortener")
-st.markdown(f"**{DOMAIN}**")
-st.divider()
+st.markdown(f"**Domain:** {DOMAIN}")
+st.markdown("---")
 
 # Load links
 links = load_links()
@@ -113,16 +90,18 @@ links = load_links()
 st.subheader("Create Short URL")
 
 short_code = st.text_input(
-    f"Short Code (after {DOMAIN}/)",
-    placeholder="resume"
+    "Short Code",
+    placeholder=f"Enter code (e.g., 'resume' for {DOMAIN}/resume)",
+    key="short_code_input"
 )
 
 destination_url = st.text_input(
     "Destination URL",
-    placeholder="https://drive.google.com/..."
+    placeholder="https://drive.google.com/...",
+    key="destination_url_input"
 )
 
-if st.button("Create", type="primary", use_container_width=True):
+if st.button("Create Short URL", type="primary", use_container_width=True):
     # Validation
     if not short_code:
         st.error("Please enter a short code")
@@ -144,36 +123,36 @@ if st.button("Create", type="primary", use_container_width=True):
         save_links(links)
 
         # Sync to Cloudflare
-        with st.spinner("Syncing..."):
+        with st.spinner("Syncing to Cloudflare..."):
             if sync_to_cloudflare():
-                st.success("Short URL created and synced")
+                st.success("Short URL created and synced!")
             else:
-                st.warning("Link saved locally")
+                st.warning("Link saved locally. Manual sync may be needed.")
 
         # Show result
-        st.divider()
-        st.markdown("**Your Short URL**")
+        st.markdown("---")
+        st.markdown("**Your Short URL is Ready**")
         st.code(f"https://{DOMAIN}/{short_code}", language=None)
         st.markdown(f"Redirects to: {destination_url}")
         st.rerun()
 
 # Display existing links
 if links:
-    st.divider()
+    st.markdown("---")
     st.subheader("Your Short URLs")
 
     for code, data in sorted(links.items()):
-        col1, col2, col3 = st.columns([2, 5, 1])
+        col1, col2, col3 = st.columns([2, 6, 1])
 
         with col1:
-            st.code(code)
+            st.markdown(f"`{code}`")
 
         with col2:
-            url_display = data['url'][:50] + "..." if len(data['url']) > 50 else data['url']
+            url_display = data['url'][:60] + "..." if len(data['url']) > 60 else data['url']
             st.markdown(f"{DOMAIN}/{code} → {url_display}")
 
         with col3:
-            if st.button("Delete", key=f"delete_{code}"):
+            if st.button("Delete", key=f"delete_{code}", type="secondary"):
                 del links[code]
                 save_links(links)
                 with st.spinner("Syncing..."):
@@ -181,11 +160,11 @@ if links:
                 st.rerun()
 
 # Footer
-st.divider()
-col1, col2 = st.columns([3, 1])
+st.markdown("---")
+col1, col2 = st.columns([4, 1])
 with col1:
-    st.caption(f"{len(links)} short URLs")
+    st.caption(f"{len(links)} short URL(s)")
 with col2:
-    if st.button("Logout"):
+    if st.button("Logout", type="secondary"):
         st.session_state.authenticated = False
         st.rerun()
