@@ -11,8 +11,8 @@ from datetime import datetime
 # Configuration
 LINKS_FILE = "links.json"
 DOMAIN = "saikiranb.com"
-USERNAME = "anangi"
-PASSWORD = "anangi"
+USERNAME = "Annangi"
+PASSWORD = "Annangi"
 
 
 def authenticate():
