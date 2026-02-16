@@ -65,9 +65,16 @@ Access the application at `http://localhost:8501` and log in with your credentia
 #### Streamlit Cloud
 
 1. Push your code to GitHub
-2. Visit [share.streamlit.io](https://share.streamlit.io)
-3. Connect your repository
-4. Deploy with main file: `streamlit_app.py`
+2. Get a Cloudflare API token:
+   - Go to https://dash.cloudflare.com/profile/api-tokens
+   - Create token with "Account.Workers KV Storage:Edit" permission
+3. Visit [share.streamlit.io](https://share.streamlit.io)
+4. Connect your repository
+5. Deploy with main file: `streamlit_app.py`
+6. In Streamlit Cloud settings, add secret:
+   ```
+   CLOUDFLARE_API_TOKEN = "your_token_here"
+   ```
 
 #### Cloudflare Workers
 

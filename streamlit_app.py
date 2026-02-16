@@ -6,6 +6,7 @@ Simple interface to create and manage short URLs
 import streamlit as st
 import json
 import subprocess
+import requests
 from datetime import datetime
 
 # Configuration
@@ -13,6 +14,10 @@ LINKS_FILE = "links.json"
 DOMAIN = "saikiranb.com"
 USERNAME = "Annangi"
 PASSWORD = "Annangi"
+
+# Cloudflare API configuration
+CLOUDFLARE_ACCOUNT_ID = "b0e8eda7f17091693a2dedbb4ef6951c"
+CLOUDFLARE_NAMESPACE_ID = "8cf22682ed674314883bc036224683ae"
 
 
 def authenticate():
@@ -38,25 +43,50 @@ def authenticate():
     return True
 
 
-def load_links_from_cloudflare():
-    """Load links from Cloudflare KV"""
+def load_links_from_cloudflare_api():
+    """Load links from Cloudflare KV using API"""
+    try:
+        # Get API token from secrets (if available in Streamlit Cloud)
+        api_token = st.secrets.get("CLOUDFLARE_API_TOKEN", None)
+        if not api_token:
+            return None
+
+        url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/{CLOUDFLARE_NAMESPACE_ID}/values/all_links"
+        headers = {"Authorization": f"Bearer {api_token}"}
+
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception:
+        return None
+
+
+def load_links_from_cloudflare_cli():
+    """Load links from Cloudflare KV using CLI"""
     try:
         result = subprocess.run(
             ['wrangler', 'kv', 'key', 'get', '--binding=LINKS', 'all_links', '--remote'],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
-        return {}
+        return None
     except Exception:
-        return {}
+        return None
 
 
 def load_links():
-    """Load links from local file or Cloudflare"""
-    # Try Cloudflare first (for cloud deployment)
-    cloudflare_links = load_links_from_cloudflare()
+    """Load links from Cloudflare or local file"""
+    # Try API first (for Streamlit Cloud)
+    cloudflare_links = load_links_from_cloudflare_api()
+    if cloudflare_links:
+        return cloudflare_links
+
+    # Try CLI (for local development)
+    cloudflare_links = load_links_from_cloudflare_cli()
     if cloudflare_links:
         return cloudflare_links
 
@@ -68,28 +98,52 @@ def load_links():
         return {}
 
 
-def save_links(links):
-    """Save links to both local file and Cloudflare"""
-    # Save to local file
-    with open(LINKS_FILE, 'w') as f:
-        json.dump(links, f, indent=2)
+def save_links_to_cloudflare_api(links):
+    """Save links to Cloudflare KV using API"""
+    try:
+        api_token = st.secrets.get("CLOUDFLARE_API_TOKEN", None)
+        if not api_token:
+            return False
 
-    # Save to Cloudflare
-    sync_to_cloudflare(links)
+        url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/{CLOUDFLARE_NAMESPACE_ID}/values/all_links"
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.put(url, headers=headers, data=json.dumps(links))
+        return response.status_code == 200
+    except Exception:
+        return False
 
 
-def sync_to_cloudflare(links):
-    """Sync links to Cloudflare KV storage"""
+def save_links_to_cloudflare_cli(links):
+    """Save links to Cloudflare KV using CLI"""
     try:
         links_json = json.dumps(links)
         result = subprocess.run(
             ['wrangler', 'kv', 'key', 'put', '--binding=LINKS', 'all_links', links_json, '--remote'],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
         return result.returncode == 0
     except Exception:
         return False
+
+
+def save_links(links):
+    """Save links to both local file and Cloudflare"""
+    # Save to local file
+    try:
+        with open(LINKS_FILE, 'w') as f:
+            json.dump(links, f, indent=2)
+    except Exception:
+        pass
+
+    # Try API first, then CLI
+    if not save_links_to_cloudflare_api(links):
+        save_links_to_cloudflare_cli(links)
 
 
 # Page config
@@ -107,7 +161,7 @@ st.title("URL Shortener")
 st.markdown(f"**Domain:** {DOMAIN}")
 st.markdown("---")
 
-# Load links (always from Cloudflare if available)
+# Load links
 links = load_links()
 
 # Show success message if just created
@@ -165,7 +219,7 @@ if st.button("Create Short URL", type="primary", use_container_width=True):
 
         st.rerun()
 
-# Display existing links (always show from loaded data)
+# Display existing links
 if links:
     st.markdown("---")
     st.subheader("Your Short URLs")
@@ -177,7 +231,6 @@ if links:
             st.markdown(f"`{code}`")
 
         with col2:
-            # Make the destination URL clickable
             url_display = data['url'][:60] + "..." if len(data['url']) > 60 else data['url']
             st.markdown(f"[{DOMAIN}/{code}]({data['url']}) → {url_display}")
 
