@@ -38,8 +38,29 @@ def authenticate():
     return True
 
 
+def load_links_from_cloudflare():
+    """Load links from Cloudflare KV"""
+    try:
+        result = subprocess.run(
+            ['wrangler', 'kv', 'key', 'get', '--binding=LINKS', 'all_links', '--remote'],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout)
+        return {}
+    except Exception:
+        return {}
+
+
 def load_links():
-    """Load links from JSON file"""
+    """Load links from local file or Cloudflare"""
+    # Try Cloudflare first (for cloud deployment)
+    cloudflare_links = load_links_from_cloudflare()
+    if cloudflare_links:
+        return cloudflare_links
+
+    # Fallback to local file
     try:
         with open(LINKS_FILE, 'r') as f:
             return json.load(f)
@@ -48,16 +69,19 @@ def load_links():
 
 
 def save_links(links):
-    """Save links to JSON file"""
+    """Save links to both local file and Cloudflare"""
+    # Save to local file
     with open(LINKS_FILE, 'w') as f:
         json.dump(links, f, indent=2)
 
+    # Save to Cloudflare
+    sync_to_cloudflare(links)
 
-def sync_to_cloudflare():
+
+def sync_to_cloudflare(links):
     """Sync links to Cloudflare KV storage"""
     try:
-        with open(LINKS_FILE, 'r') as f:
-            links_json = f.read()
+        links_json = json.dumps(links)
         result = subprocess.run(
             ['wrangler', 'kv', 'key', 'put', '--binding=LINKS', 'all_links', links_json, '--remote'],
             capture_output=True,
@@ -83,8 +107,19 @@ st.title("URL Shortener")
 st.markdown(f"**Domain:** {DOMAIN}")
 st.markdown("---")
 
-# Load links
+# Load links (always from Cloudflare if available)
 links = load_links()
+
+# Show success message if just created
+if "just_created" in st.session_state and st.session_state.just_created:
+    created_code = st.session_state.created_code
+    created_url = st.session_state.created_url
+    st.success(f"Short URL created!")
+    st.markdown("**Your Short URL is Ready**")
+    st.code(f"https://{DOMAIN}/{created_code}", language=None)
+    st.markdown(f"Redirects to: {created_url}")
+    st.markdown("---")
+    st.session_state.just_created = False
 
 # Create new short URL
 st.subheader("Create Short URL")
@@ -102,7 +137,6 @@ destination_url = st.text_input(
 )
 
 if st.button("Create Short URL", type="primary", use_container_width=True):
-    # Validation
     if not short_code:
         st.error("Please enter a short code")
     elif not short_code.replace("-", "").replace("_", "").isalnum():
@@ -120,23 +154,18 @@ if st.button("Create Short URL", type="primary", use_container_width=True):
             "created": datetime.now().isoformat(),
             "clicks": 0
         }
+
+        # Save to both local and Cloudflare
         save_links(links)
 
-        # Sync to Cloudflare
-        with st.spinner("Syncing to Cloudflare..."):
-            if sync_to_cloudflare():
-                st.success("Short URL created and synced!")
-            else:
-                st.warning("Link saved locally. Manual sync may be needed.")
+        # Store in session state for success message
+        st.session_state.just_created = True
+        st.session_state.created_code = short_code
+        st.session_state.created_url = destination_url
 
-        # Show result
-        st.markdown("---")
-        st.markdown("**Your Short URL is Ready**")
-        st.code(f"https://{DOMAIN}/{short_code}", language=None)
-        st.markdown(f"Redirects to: {destination_url}")
         st.rerun()
 
-# Display existing links
+# Display existing links (always show from loaded data)
 if links:
     st.markdown("---")
     st.subheader("Your Short URLs")
@@ -148,22 +177,23 @@ if links:
             st.markdown(f"`{code}`")
 
         with col2:
+            # Make the destination URL clickable
             url_display = data['url'][:60] + "..." if len(data['url']) > 60 else data['url']
-            st.markdown(f"{DOMAIN}/{code} → {url_display}")
+            st.markdown(f"[{DOMAIN}/{code}]({data['url']}) → {url_display}")
 
         with col3:
             if st.button("Delete", key=f"delete_{code}", type="secondary"):
                 del links[code]
                 save_links(links)
-                with st.spinner("Syncing..."):
-                    sync_to_cloudflare()
                 st.rerun()
+else:
+    st.info("No short URLs created yet. Create your first one above!")
 
 # Footer
 st.markdown("---")
 col1, col2 = st.columns([4, 1])
 with col1:
-    st.caption(f"{len(links)} short URL(s)")
+    st.caption(f"{len(links)} short URL(s) • Synced to Cloudflare")
 with col2:
     if st.button("Logout", type="secondary"):
         st.session_state.authenticated = False
